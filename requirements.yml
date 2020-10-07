@@ -1,0 +1,89 @@
+---
+    - hosts: all
+      become: yes
+
+      tasks:
+            - name: Install aptitude using apt
+              apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+            - name: Install required system packages
+              apt: name={{ item }} state=latest update_cache=yes
+              loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'virtualenv', 'python3-setuptools']
+
+            - name: Add Docker GPG apt Key
+              apt_key:
+                url: https://download.docker.com/linux/ubuntu/gpg
+                state: present
+
+            - name: Add Docker Repository
+              apt_repository:
+                repo: deb https://download.docker.com/linux/ubuntu bionic stable
+                state: present
+
+            - name: Update apt and install docker-ce
+              apt: update_cache=yes name=docker-ce state=latest
+
+            - name: Install Docker Module for Python
+              pip:
+                name: docker
+
+            - name: create user
+              user:
+                name: "{{ user }}"
+                password: "{{ password | password_hash('sha512') }}"
+                shell: /bin/bash
+                comment: "{{ user }}"
+                uid: 2000
+                state: present
+
+
+            - name: Add_general_user_to_dockergroup
+              user:
+                name: "{{ user }}"
+                groups: docker
+
+            - name: Enable_Module
+              modprobe:
+                name: "{{ item }}"
+                state: present
+              with_items:
+                - ip6_udp_tunnel 
+                - ip_set 
+                - ip_set_hash_ip 
+                - ip_set_hash_net 
+                - iptable_mangle 
+                - iptable_raw 
+                - udp_tunnel 
+                - veth 
+                - vxlan 
+                - x_tables 
+                - xt_comment 
+                - xt_mark 
+                - xt_multiport 
+                - xt_nat 
+                - xt_recent 
+                - xt_set 
+                - xt_statistic 
+                - xt_tcpudp 
+            
+            - name: Modify_Sysctl
+              sysctl:
+                name: '{{ item.key }}'
+                value: 1
+                sysctl_set: yes
+                state: present
+                reload: yes
+              with_items:
+                - {key: net.bridge.bridge-nf-call-iptables}
+
+    - hosts: worker
+      become: yes
+      tasks: 
+            - name: Disable_Swap
+              shell: swapoff -a
+
+            - name: Disable_Swap2
+              lineinfile:
+                path: /etc/fstab
+                regexp: "^/swapfile none swap defaults 0 0"
+                line: "#/swapfile none swap defaults 0 0"
